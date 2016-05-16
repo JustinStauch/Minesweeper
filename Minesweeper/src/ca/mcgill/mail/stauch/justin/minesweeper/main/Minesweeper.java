@@ -2,16 +2,54 @@ package ca.mcgill.mail.stauch.justin.minesweeper.main;
 
 import java.util.Random;
 
+import ca.mcgill.mail.stauch.justin.minesweeper.gui.Board;
+import ca.mcgill.mail.stauch.justin.minesweeper.gui.icons.FaceIcon;
+
+/**
+ * Main class of the program.
+ * 
+ * This class handles the game play. It tracks the underlying mines, and the sate of each space on the board.
+ * 
+ * This is a minesweeper game. It consists of a grid of covered boxes.
+ * In a certain number of these boxes, there is a mine.
+ * The size of the field, and the number of mines depends on difficulty,
+ * but the information will always be available to the player.
+ * 
+ * The player clicks a box, revealing the underlying space.
+ * If the space is a mine, the player loses.
+ * If it is not a mine, it will display the number of mines in adjacent spaces.
+ * This count includes boxes above, below, and to either side of the box,
+ * as well as the spaces on the corners of the box.
+ * 
+ * The goals is to open every box that is not a mine without selecting a mine.
+ * 
+ * Right clicking a box flags it as a mine.
+ * Right clicking a number space that is touching its number of flags
+ * opens its non-flagged adjacent boxes.
+ *
+ * @author Justin Stauch
+ * @since 
+ *
+ */
 public class Minesweeper {
-    private int level, minesLeft, height, width;
-    private boolean[][] field;
-    private Board board;
-    private BlockState[][] states;
-    private boolean firstMove, active;
+    private final Difficulty level; //The difficulty of the game.
+    private int minesLeft, height, width; //Parameters for the game. The number of mines total - the number of flags.
+    private boolean[][] field; //The grid of the game. True indicates a mine in the space.
+    private Board board; //The main JFrame handling the GUI.
+    private BlockState[][] states; //A representation of what should be displayed for each space.
+    private boolean firstMove, active; //Tracks different handling of the first move, and when the game is done.
 	
-    public Minesweeper(int level) {
+    /**
+     * Construct a game of the given difficulty.
+     * 
+     * @param level The difficulty to build it with.
+     */
+    private Minesweeper(Difficulty level) {
     	this.level = level;
-    	field = createField(level);
+    	minesLeft = this.level.getMines();
+    	height = this.level.getHeight();
+    	width = this.level.getWidth();
+    	field = createField();
     	states = trackBlockStates();
     	board = new Board(this, field.length, field[0].length);
     	board.setMinesLeft(minesLeft);
@@ -21,31 +59,57 @@ public class Minesweeper {
     }
     
 	public static void main(String args[]) {
-		new Minesweeper(0);
+		new Minesweeper(Difficulty.HARD);
 	}
 	
+	/**
+	 * Resets all the variables to their original states,
+	 * so another game can be played.
+	 */
 	public void resetGame() {
-		field = createField(level);
+		minesLeft = level.getMines();
+    	height = level.getHeight();
+    	width = level.getWidth();
+		field = createField();
 		states = trackBlockStates();
 		board.updateStates(states);
+		board.setFace(FaceIcon.NORMAL);
+		board.setMinesLeft(minesLeft);
+		board.resetTime();
 		firstMove = true;
 		active = true;
 	}
 	
-	public Board getBoard() {
-		return board;
-	}
-	
-	public int getMinesLeft() {
-		return minesLeft;
-	}
-	
+	/**
+	 * Check if a game is in progress to see if to ignore certain inputs.
+	 * 
+	 * @return If a game is in progress.
+	 */
 	public boolean isActive() {
 		return active;
 	}
 	
+	/**
+	 * Get the state being shown at the given coordinates.
+	 * 
+	 * @param x The x value to check.
+	 * @param y The y value to check.
+	 * @return A BlockState representing what the user sees at the given space.
+	 */
 	public BlockState getState(int x, int y) {
 		return states[x][y];
+	}
+	
+	/*public void setFace(FaceIcon icon) {
+		board.setFace(icon);
+	}*/
+	
+	public void faceScared() {
+		board.setFace(FaceIcon.SCARED);
+	}
+	
+	public void faceNotScared() {
+		board.faceNotScared();
 	}
 	
 	/**
@@ -110,48 +174,67 @@ public class Minesweeper {
 		}
 		
 		firstMove = false;
+		board.startTiming();
 	}
 	
-	public BlockState[][] blockSelected(int x, int y) {
+	/**
+	 * Handles the event that a block is selected.
+	 * 
+	 * @param x The x value of the clicked mine.
+	 * @param y The y value of the clicked mine.
+	 */
+	public void blockSelected(int x, int y) {
+		//Do nothing if there is no game being played.
 		if (!active) {
-			return states;
+			return;
 		}
 		
+		//Only Unopened, and question mark blocks can be opened.
 		if (states[x][y] != BlockState.UNOPENED && states[x][y] != BlockState.QUESTION_MARK) {
-			return states;
+			return;
 		}
 		
+		//The first move requires making the field.
 		if (firstMove) {
 			firstMove(x, y);
 		}
 		
+		//A mine was clicked.
 		if (field[x][y]) {
-			gameOver();
+			gameOver(); //Handle the game over.
+			
+			//Display the area that was clicked as a mine.
 			states[x][y] = BlockState.CLICKED_MINE;
-			return states;
+			
+			//Update the GUI.
+			board.updateStates(states);
+			return;
 		}
 		
 	    short minesTouching = 0;
 		
+	    //Check each space.
 		for (int i = x - 1; i <= x + 1; i++) {
+			//Make sure the space is not off the board.
 			if (i < 0 || i >= states.length) {
 				continue;
 			}
 			for (int j = y - 1; j <= y + 1; j++) {
+				//Make sure the space is not off the board.
 				if (j < 0 || j >= states[i].length) {
 					continue;
 				}
+				//Count the mine.
 				if (field[i][j]) {
-					if (i == x && j == y) {
-						continue;
-					}
 					minesTouching++;
 				}
 			}
 		}
 		
+		//Convert the number of mines touching to a BlockState value.
 		states[x][y] = BlockState.fromNumber(minesTouching);
 		
+		//If the space touches no mines, then open all the adjacent spaces.
 		if (minesTouching == 0) {
 			for (int i = x - 1; i <= x + 1; i++) {
 				if (i < 0 || i >= states.length) {
@@ -166,31 +249,45 @@ public class Minesweeper {
 			}
 		}
 		
+		//Check if every space that is not a mine has been selected.
 		checkForWin();
 		
-		return states;
+		//Update the GUI.
+		board.updateStates(states);
 	}
 	
-	public BlockState[][] blockFlagged(int x, int y) {
+	/**
+	 * Handle when a block is right clicked.
+	 * 
+	 * @param x The x value of the clicked block.
+	 * @param y The y value of the clicked block.
+	 */
+	public void blockFlagged(int x, int y) {
+		//Check if a game is beeing played.
 		if (!active) {
-			return states;
+			return;
 		}
 		
+		//Change an unopened block to a flagged block, knock down the count of mines not flagged.
 		if (states[x][y] == BlockState.UNOPENED) {
 			minesLeft--;
 			states[x][y] = BlockState.FLAGGED;
 		}
+		//Flagged to a question mark, put the mine count back up.
 		else if (states[x][y] == BlockState.FLAGGED) {
 			states[x][y] = BlockState.QUESTION_MARK;
 			minesLeft++;
 		}
+		//Change the flag to a question mark.
 		else if (states[x][y] == BlockState.QUESTION_MARK) {
 			states[x][y] = BlockState.UNOPENED;
 		}
+		//It's a number, check if the surrounding blocks can be opened.
 		else {
             short minesTouching = 0;
             short flagsTouching = 0;
 			
+            //Check the adjacent spaces, and count the number of flags, and mines it is touching.
 			for (int i = x - 1; i <= x + 1; i++) {
 				if (i < 0 || i >= states.length) {
 					continue;
@@ -211,7 +308,8 @@ public class Minesweeper {
 				}
 			}
 			
-			if (flagsTouching == minesTouching) {
+			//If there is at least one adjacent flag per adjacent mine, open all of its adjacent unopened spaces.
+			if (flagsTouching >= minesTouching) {
 				for (int i = x - 1; i <= x + 1; i++) {
 					if (i < 0 || i >= states.length) {
 						continue;
@@ -231,13 +329,17 @@ public class Minesweeper {
 			}
 		}
 		
-		return states;
+		//Update GUI's field.
+		board.updateStates(states);
+		//Update the displayed mines left.
+		board.setMinesLeft(minesLeft);
 	}
 	
 	private void gameOver() {
+		board.stopTiming();
 		active = false;
 		
-		board.setFace(2);
+		board.setFace(FaceIcon.DEAD);
 		
 		for (int x = 0; x < states.length; x++) {
 			for (int y = 0; y < states[x].length; y++) {
@@ -264,9 +366,10 @@ public class Minesweeper {
 			}
 	    }
 		
+		board.stopTiming();
 		active = false;
 		
-		board.setFace(3);
+		board.setFace(FaceIcon.WIN);
 				
 		for (int x = 0; x < states.length; x++) {
 			for (int y = 0; y < states[x].length; y++) {
@@ -276,32 +379,13 @@ public class Minesweeper {
 			}
 	    }
 		
-		board.updateStates(states);
+		minesLeft = 0;
+		
+		board.setMinesLeft(minesLeft);
 	}
 	
-	private boolean[][] createField(int level) {
-		int mines;
-		
-		switch (level) {
-		    case 2:  height = 16;
-		             width = 30;
-		             mines = 99;
-		             break;
-		    case 1:  height = 16;
-		             width = 16;
-		             mines = 40;
-		             break;
-		    case 0:  height = 8;
-                     width = 8;
-                     mines = 10;
-                     break;
-		    default: height = 32;
-		             width = 70;
-		             mines = 32 * 70 - 1;
-		             break;
-		}
-		
-		minesLeft = mines;
+	private boolean[][] createField() {
+		int mines = minesLeft;
 		
 		boolean[][] field = new boolean[width][height];
 		

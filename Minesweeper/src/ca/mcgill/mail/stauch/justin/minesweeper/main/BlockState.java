@@ -1,5 +1,10 @@
 package ca.mcgill.mail.stauch.justin.minesweeper.main;
 
+import java.net.URL;
+
+import javax.swing.Icon;
+import javax.swing.ImageIcon;
+
 public enum BlockState {
     UNOPENED("Unopened.png"),
     FLAGGED("Flagged.png"),
@@ -17,16 +22,22 @@ public enum BlockState {
     SEVEN("Seven.png"),
     EIGHT("Eight.png");
 	
-	private String file;
+	private final String file;
 	
 	private BlockState(String file) {
 		this.file = file;
 	}
 	
-	public String getIconFile() {
-		return file;
+	public Icon getIcon() {
+		return new ImageIcon(file);
 	}
 	
+	/**
+	 * Gets the BlockState with the given number on the face.
+	 * 
+	 * @param num The number of mines the block is touching.
+	 * @return A BlockState representing the given number of mines that it is touching.
+	 */
 	public static BlockState fromNumber(short num) {
 		switch (num) {
 		    case 1:  return ONE;
